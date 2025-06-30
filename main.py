@@ -8,7 +8,7 @@ from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import CharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
-from chromadb.config import Settings
+import chromadb
 
 # Load environment variables
 load_dotenv()
@@ -23,15 +23,10 @@ raw_documents = TextLoader('tagged_description.txt', encoding='utf-8').load()
 text_splitter = CharacterTextSplitter(chunk_size=2000, chunk_overlap=100, separator='\n', length_function=len)
 documents = text_splitter.split_documents(raw_documents)
 
-# Setup HuggingFace embeddings
+# Set up HuggingFace embeddings
 embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
-# Use Chroma in-memory to avoid tenant issues
-chroma_settings = Settings(
-    chroma_db_impl="duckdb+parquet",
-    persist_directory=None
-)
-db_books = Chroma.from_documents(documents, embeddings, client_settings=chroma_settings)
+db_books = Chroma.from_documents(documents, embeddings)
 
 # Recommendation logic
 def retrieve_semantic_recommendations(query: str, category: str = None, tone: str = None, initial_top_k: int = 50, final_top_k: int = 16) -> pd.DataFrame:
@@ -57,18 +52,18 @@ def retrieve_semantic_recommendations(query: str, category: str = None, tone: st
 
     return books_recs
 
-# Streamlit App
+# Streamlit UI
 st.set_page_config(page_title="Semantic Book Recommender", layout="wide")
 st.title("📚 Semantic Book Recommender")
 
-query = st.text_input("Enter a description of a book you'd like:", placeholder="e.g. A journey of redemption and love")
+query = st.text_input("Describe the kind of book you're looking for:", placeholder="e.g. An inspiring story of self-discovery")
 
 category = st.selectbox("Choose a category", ["All"] + sorted(books['simple_categories'].unique()))
 tone = st.selectbox("Choose a tone", ["All", "Happy", "Surprising", "Angry", "Suspenseful", "Sad"])
 
 if st.button("Find Recommendations") and query:
     results = retrieve_semantic_recommendations(query, category, tone)
-    st.subheader("Top Recommendations")
+    st.subheader("Recommended Books")
     for _, row in results.iterrows():
         col1, col2 = st.columns([1, 5])
         with col1:
@@ -83,4 +78,3 @@ if st.button("Find Recommendations") and query:
                 authors_str = row['authors']
             st.markdown(f"**{row['title']}** by *{authors_str}*")
             st.caption(" ".join(row['description'].split()[:30]) + "...")
-
