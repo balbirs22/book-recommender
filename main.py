@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import CharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_chroma import Chroma
+from langchain.vectorstores import FAISS
 import chromadb
 
 # Load environment variables
@@ -26,7 +26,9 @@ documents = text_splitter.split_documents(raw_documents)
 # Set up HuggingFace embeddings
 embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
-db_books = Chroma.from_documents(documents, embeddings)
+
+db_books = FAISS.from_documents(documents, embeddings)
+
 
 # Recommendation logic
 def retrieve_semantic_recommendations(query: str, category: str = None, tone: str = None, initial_top_k: int = 50, final_top_k: int = 16) -> pd.DataFrame:
