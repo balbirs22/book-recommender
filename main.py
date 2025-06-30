@@ -2,82 +2,86 @@ import os
 import pandas as pd
 import numpy as np
 from dotenv import load_dotenv
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
-import gradio as gr
-
+import streamlit as st
 from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import CharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
+from langchain_huggingface import HuggingFaceEmbeddings
 
 # Load environment variables
 load_dotenv()
 
-# Load data
+# Load books data
 books = pd.read_csv('books_with_emotions.csv')
-books['large_thumbnail'] = books['thumbnail'].fillna('cover-not-found.png') + "&fife=w800"
+books['large_thumbnail'] = books['thumbnail'] + "&fife=w800"
 books['large_thumbnail'] = np.where(books['large_thumbnail'].isna(), 'cover-not-found.png', books['large_thumbnail'])
 
-# Load and embed descriptions
+# Load and process text data
 raw_documents = TextLoader('tagged_description.txt', encoding='utf-8').load()
 text_splitter = CharacterTextSplitter(chunk_size=2000, chunk_overlap=100, separator='\n', length_function=len)
 documents = text_splitter.split_documents(raw_documents)
 embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 db_books = Chroma.from_documents(documents, embeddings)
 
-def retrieve_sematic_recommendations(query, category="All", tone="All", initial_top_k=50, final_top_k=16):
+# Recommendation logic
+def retrieve_sematic_recommendations(query: str, category: str = None, tone: str = None, initial_top_k: int = 50, final_top_k: int = 16) -> pd.DataFrame:
     recs = db_books.similarity_search(query, k=initial_top_k)
     books_list = [int(rec.page_content.strip('"').split()[0]) for rec in recs]
     books_recs = books[books['isbn13'].isin(books_list)].head(final_top_k)
 
-    if category != "All":
+    if category and category != "All":
         books_recs = books_recs[books_recs['simple_categories'] == category][:final_top_k]
 
-    if tone == "Happy":
-        books_recs = books_recs.sort_values(by='joy', ascending=False)
-    elif tone == "Surprising":
-        books_recs = books_recs.sort_values(by='surprise', ascending=False)
-    elif tone == "Angry":
-        books_recs = books_recs.sort_values(by='anger', ascending=False)
-    elif tone == "Suspenseful":
-        books_recs = books_recs.sort_values(by='fear', ascending=False)
-    elif tone == "Sad":
-        books_recs = books_recs.sort_values(by='sadness', ascending=False)
+    tone_sorting = {
+        "Happy": 'joy',
+        "Surprising": 'surprise',
+        "Angry": 'anger',
+        "Suspenseful": 'fear',
+        "Sad": 'sadness'
+    }
+
+    if tone in tone_sorting:
+        books_recs = books_recs.sort_values(by=tone_sorting[tone], ascending=False)
 
     return books_recs
 
-def recommend_books(query, category, tone):
+def recommend_books(query: str, category: str, tone: str):
     recommendations = retrieve_sematic_recommendations(query, category, tone)
     results = []
     for _, row in recommendations.iterrows():
         description = row['description']
         truncated_description = " ".join(description.split()[:30]) + "..."
-        authors = row['authors'].split(';')
-        authors_str = ', '.join(authors[:2]) + (' and others' if len(authors) > 2 else '')
-        caption = f"{row['title']} by {authors_str} : {truncated_description}"
+        authors_split = row['authors'].split(';')
+        if len(authors_split) == 2:
+            authors_str = f"{authors_split[0]} and {authors_split[1]}"
+        elif len(authors_split) > 2:
+            authors_str = f"{', '.join(authors_split[:-1])}, and {authors_split[-1]}"
+        else:
+            authors_str = row['authors']
+        caption = f"**{row['title']}** by {authors_str}\n\n{truncated_description}"
         results.append((row['large_thumbnail'], caption))
     return results
 
-# UI definition
+# Streamlit UI
+st.set_page_config(layout="wide")
+st.title("📚 Semantic Book Recommender")
+
+query = st.text_input("Enter a description of a book:", placeholder="e.g. A story about forgiveness")
 categories = ["All"] + sorted(books['simple_categories'].unique())
 tones = ["All", "Happy", "Surprising", "Angry", "Suspenseful", "Sad"]
 
-gr_interface = gr.Interface(
-    fn=recommend_books,
-    inputs=[
-        gr.Textbox(label="Enter a book description", placeholder="e.g. A story about forgiveness"),
-        gr.Dropdown(choices=categories, label="Select a category", value="All"),
-        gr.Dropdown(choices=tones, label="Select a tone", value="All")
-    ],
-    outputs=gr.Gallery(label="Recommended books", columns=4, rows=2),
-    title="Semantic Book Recommender"
-)
+col1, col2 = st.columns(2)
+with col1:
+    category = st.selectbox("Select a category:", categories, index=0)
+with col2:
+    tone = st.selectbox("Select a tone:", tones, index=0)
 
-# FastAPI app
-app = FastAPI()
-
-@app.get("/", response_class=HTMLResponse)
-def main():
-    return gr_interface.launch(share=False, inline=True)
-
+if st.button("🔍 Find Recommendations") and query:
+    results = recommend_books(query, category, tone)
+    for thumbnail, caption in results:
+        with st.container():
+            col_img, col_txt = st.columns([1, 3])
+            with col_img:
+                st.image(thumbnail, use_column_width=True)
+            with col_txt:
+                st.markdown(caption)
