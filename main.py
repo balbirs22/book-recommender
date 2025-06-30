@@ -8,7 +8,6 @@ from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import CharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS
-import chromadb
 
 # Load environment variables
 load_dotenv()
