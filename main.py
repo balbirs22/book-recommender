@@ -86,6 +86,7 @@ with gr.Blocks(theme= gr.themes.Glass()) as dashboard:
     output = gr.Gallery(label= "Recommended books",columns=8,rows=2)
     submit_button.click(fn= recommend_books, inputs= [user_query, category_dropdown, tone_dropdown],outputs= output)
 
-
 if __name__ == '__main__':
-    dashboard.launch()
+    import os
+    port = int(os.environ.get("PORT", 7860))  # Render assigns a random port
+    dashboard.launch(server_name="0.0.0.0", server_port=port)
