@@ -1,8 +1,9 @@
 streamlit
+python-dotenv
 pandas
 numpy
-python-dotenv
+chromadb
 langchain
 langchain-community
 langchain-huggingface
-langchain-chroma
+sentence-transformers
