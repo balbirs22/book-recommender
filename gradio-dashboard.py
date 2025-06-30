@@ -6,6 +6,7 @@ from langchain_text_splitters import CharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
 from langchain_chroma import Chroma
 import gradio as gr
+from langchain_huggingface import HuggingFaceEmbeddings
 
 load_dotenv()
 books = pd.read_csv('books_with_emotions.csv')
@@ -14,9 +15,12 @@ books['large_thumbnail'] = books['thumbnail'] + "&fife=w800"
 books['large_thumbnail'] = np.where(books['large_thumbnail'].isna(), 'cover-not-found.png', books['large_thumbnail'])
 
 raw_documents = TextLoader('tagged_description.txt', encoding='utf-8').load()
-text_splitter = CharacterTextSplitter(chunk_size=0, chunk_overlap=0, separator='\n')
+text_splitter = CharacterTextSplitter(chunk_size=2000, chunk_overlap=100, separator='\n',length_function=len)
 documents = text_splitter.split_documents(raw_documents)
-db_books = Chroma.from_documents(documents, OpenAIEmbeddings())
+embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+
+db_books = Chroma.from_documents(documents, embeddings)
+
 
 
 def retrieve_sematic_recommendations(query: str, category: str = None, tone: str = None, initial_top_k: int = 50,
