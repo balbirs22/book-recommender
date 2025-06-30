@@ -1,7 +1,10 @@
 services:
   - type: web
-    name: gradio-book-recommender
-    env: python
+    name: book-recommender
+    runtime: python
+    region: oregon
     buildCommand: pip install -r requirements.txt
-    startCommand: python main.py
-    autoDeploy: true
+    startCommand: uvicorn main:app --host 0.0.0.0 --port 10000
+    envVars:
+      - key: PORT
+        value: 10000
